@@ -1,0 +1,44 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+myenv/
+airflow_env/
+ENV/
+env/
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Logs
+*.log
+*.sql
+*.sqlite
+*.db
+.env
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+Thumbs.db
+*.DS_Store
+desktop.ini
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Test / coverage
+.pytest_cache/
+coverage.xml
+htmlcov/
+.coverage
+
+# Optional: scraped / output data
+Palmonas/
+# Palmonas/**/Products/
+#Palmonas/**/Category/

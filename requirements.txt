@@ -1,0 +1,4 @@
+pymongo
+playwright
+requests
+python-dotenv
