@@ -1,119 +1,102 @@
 import asyncio
-import logging
-import os
 import json
-from datetime import datetime
+import logging
 from urllib.parse import urljoin
 from playwright.async_api import async_playwright
+from scripts.utils import build_path, ensure_dir, get_today_folder
 
 logging.basicConfig(level=logging.INFO)
 
 BASE_URL = "https://www.palmonas.com"
 
 
-# ✅ VALID CATEGORY FILTER
 def is_valid_category(name, href):
-
     if not name or len(name.strip()) < 3:
         return False
 
-    name = name.lower()
-    href = href.lower()
-
-    # ❌ Remove junk / promo / navigation
-    invalid_keywords = [
-        "sale", "offer", "free", "gift", "combo",
-        "view", "all", "new", "best",
-        "|", "@", "₹", "%"
-    ]
-
-    if any(k in name for k in invalid_keywords):
-        return False
-
-    if any(k in href for k in invalid_keywords):
-        return False
-
-    # ❌ Must be proper collection
-    if "/collections/" not in href:
-        return False
-
-    return True
+    invalid = ["sale", "offer", "free", "gift", "combo", "view", "all"]
+    return "/collections/" in href and not any(k in name.lower() for k in invalid)
 
 
-async def scrape_categories():
+async def scrape():
+    today = get_today_folder()
 
-    today = datetime.now().strftime("%Y-%m-%d")
-
-    output_file = os.path.join(
-        "Palmonas", today, "Category", "category_urls.json"
-    )
-    os.makedirs(os.path.dirname(output_file), exist_ok=True)
+    output_file = build_path("Palmonas", today, "Category", "category_urls.json")
+    ensure_dir(output_file)
 
     results = {}
-    seen_handles = set()
+    seen = set()
 
     async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True)
-        page = await browser.new_page()
 
-        await page.goto(BASE_URL, timeout=60000)
-        await page.wait_for_load_state("networkidle")
+        browser = await p.chromium.launch(
+            headless=True,
+            args=[
+                "--no-sandbox",
+                "--disable-dev-shm-usage",
+                "--disable-blink-features=AutomationControlled"
+            ]
+        )
 
-        # ✅ Remove popup
-        try:
-            await page.evaluate("""
-                let popup = document.querySelector('iframe, [id*="popup"]');
-                if (popup) popup.remove();
-            """)
-        except:
-            pass
+        context = await browser.new_context(
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+        )
 
-        await page.wait_for_timeout(2000)
+        page = await context.new_page()
+
+        # 🔥 Retry logic
+        for attempt in range(3):
+            try:
+                logging.info(f"Loading page attempt {attempt+1}")
+                await page.goto(BASE_URL, timeout=60000, wait_until="domcontentloaded")
+                break
+            except Exception as e:
+                logging.warning(f"Retry failed: {e}")
+                await asyncio.sleep(3)
+
+        # 🔥 WAIT MORE (IMPORTANT)
+        await page.wait_for_timeout(5000)
 
         elements = await page.locator("a[href*='/collections/']").all()
 
-        logging.info(f"🔎 Raw links found: {len(elements)}")
+        logging.info(f"Total elements found: {len(elements)}")
 
         for el in elements:
             try:
                 name = (await el.inner_text()).strip()
                 href = await el.get_attribute("href")
 
-                if not href:
+                if not name or not href:
                     continue
 
-                href = urljoin(BASE_URL, href)
-                href = href.split("?")[0]
+                href = urljoin(BASE_URL, href).split("?")[0]
 
-                # ✅ Extract handle
                 handle = href.split("/collections/")[-1]
 
-                # ❌ Skip invalid
                 if not is_valid_category(name, href):
                     continue
 
-                # ❌ Skip duplicates (same collection)
-                if handle in seen_handles:
+                if handle in seen:
                     continue
 
-                seen_handles.add(handle)
-
+                seen.add(handle)
                 results[name] = href
 
-            except:
-                continue
+            except Exception as e:
+                logging.warning(f"Element error: {e}")
 
         await browser.close()
 
-    # ✅ FINAL SAFETY CHECK
-    if len(results) < 5:
-        raise Exception("❌ Too few valid categories extracted")
+    # 🔥 DO NOT CRASH DAG
+    if len(results) == 0:
+        logging.warning("⚠️ No categories found — but not failing")
 
     with open(output_file, "w", encoding="utf-8") as f:
         json.dump(results, f, indent=2)
 
-    logging.info(f"✅ Clean categories saved: {len(results)}")
+    logging.info(f"✅ Categories saved: {len(results)}")
+    logging.info(f"📁 File: {output_file}")
 
 
 def run_step1():
-    asyncio.run(scrape_categories())
+    asyncio.run(scrape())

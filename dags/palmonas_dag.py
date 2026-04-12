@@ -1,64 +1,53 @@
-from airflow import DAG
-from airflow.operators.python import PythonOperator  # type: ignore
-from datetime import datetime, timedelta
 import sys
 import os
 
-# ✅ Add project root (NOT scripts folder directly)
-BASE_DIR = "/mnt/c/Users/SAHUSHREE/OneDrive/Vision Project"
+BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.append(BASE_DIR)
-from scripts.step1_get_category_urls import run_step1
-from scripts.step2_get_products_links import run_step2
-from scripts.step3_remove_duplicates import run_step3
-from scripts.step4_product_data import run_step4
-from scripts.load_to_mongodb import load_to_mongodb
+
+from airflow import DAG
+from airflow.providers.standard.operators.python import PythonOperator
+from datetime import datetime, timedelta
 
 
 default_args = {
     "owner": "sahu",
-    "depends_on_past": False,
-    "start_date": datetime(2026, 3, 21),
     "retries": 2,
     "retry_delay": timedelta(minutes=5),
 }
 
 
+def step1():
+    from scripts.step1_get_category_urls import run_step1
+    run_step1()
+
+def step2():
+    from scripts.step2_get_products_links import run_step2
+    run_step2()
+
+def step3():
+    from scripts.step3_remove_duplicates import run_step3
+    run_step3()
+
+def step4():
+    from scripts.step4_product_data import run_step4
+    run_step4()
+
+def step5():
+    from scripts.load_to_mongodb import run_step5
+    run_step5()
+
+
 with DAG(
     dag_id="palmonas_etl_pipeline",
-    default_args=default_args,
+    start_date=datetime(2026, 3, 21),
     schedule="@daily",
     catchup=False,
-    tags=["etl", "palmonas"],
 ) as dag:
 
-    step1 = PythonOperator(
-        task_id="extract_categories",
-        python_callable=run_step1,
-        execution_timeout=timedelta(minutes=10),
-    )
+    t1 = PythonOperator(task_id="step1", python_callable=step1)
+    t2 = PythonOperator(task_id="step2", python_callable=step2)
+    t3 = PythonOperator(task_id="step3", python_callable=step3)
+    t4 = PythonOperator(task_id="step4", python_callable=step4)
+    t5 = PythonOperator(task_id="step5", python_callable=step5)
 
-    step2 = PythonOperator(
-        task_id="extract_product_links",
-        python_callable=run_step2,
-        execution_timeout=timedelta(minutes=15),
-    )
-
-    step3 = PythonOperator(
-        task_id="remove_duplicates",
-        python_callable=run_step3,
-        execution_timeout=timedelta(minutes=5),
-    )
-
-    step4 = PythonOperator(
-    task_id="extract_product_details",
-    python_callable=run_step4,
-    execution_timeout=timedelta(minutes=30),
-    )
-
-    load_db = PythonOperator(
-        task_id="load_to_mongodb",
-        python_callable=load_to_mongodb,
-        execution_timeout=timedelta(minutes=10),
-    )
-
-    step1 >> step2 >> step3 >> step4 >> load_db
+    t1 >> t2 >> t3 >> t4 >> t5

@@ -1,4 +1,8 @@
+streamlit
 pymongo
+pandas
+plotly
 playwright
+aiohttp
 requests
 python-dotenv

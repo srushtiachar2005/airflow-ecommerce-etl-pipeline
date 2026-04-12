@@ -1,0 +1,18 @@
+# ignore environments
+airflow_env
+myenv
+__pycache__
+
+# ignore system files
+*.pyc
+*.pyo
+*.pyd
+
+# ignore configs
+.env
+.git
+.vscode
+
+# 🔥 VERY IMPORTANT
+logs
+airflow/logs

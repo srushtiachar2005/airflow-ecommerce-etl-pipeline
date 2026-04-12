@@ -5,14 +5,14 @@ import plotly.express as px
 from dotenv import load_dotenv
 import os
 
-load_dotenv()
+from pymongo import MongoClient
 
 st.set_page_config(page_title="Palmonas Dashboard", layout="wide")
-client = MongoClient(os.getenv("MONGO_URI"))
-# ------------------- CONFIG -------------------
 
+client = MongoClient("mongodb://mongodb:27017/")
 db = client["palmonas_db"]
 collection = db["products"]
+
 
 data = list(collection.find())
 
